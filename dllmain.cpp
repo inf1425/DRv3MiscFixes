@@ -1,4 +1,3 @@
-// dllmain.cpp : Defines the entry point for the DLL application.
 #include "pch.h"
 
 #include <iostream>
@@ -111,10 +110,15 @@ DWORD WINAPI WorkerThreadWrapper(LPVOID lpParam) {
 
     if (!patchRenderThreadFpsLimiter(gameMemory, gameMemoryLen)) {
         log("Failed to patch render thread FPS limiter.");
+    } else {
+        log("Patched render thread FPS limiter.");
     }
 
     if (!patchUpdateThreadFpsLimiter(gameMemory, gameMemoryLen)) {
         log("Failed to patch update thread FPS limiter.");
+    }
+    else {
+        log("Patched update thread FPS limiter.");
     }
 
     return 0;
