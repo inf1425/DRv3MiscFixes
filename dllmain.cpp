@@ -35,12 +35,6 @@ public:
 
         DWORD millisecondsToWait = max(0, min(microsecondsToWait / 1000, maxSleepMs)); // clamping to a reasonable about
 
-        /*if (millisecondsToWait >= 2) {
-            timeBeginPeriod(1);
-            Sleep((DWORD)(millisecondsToWait - 1));
-            timeEndPeriod(1);
-        }*/
-
         timeBeginPeriod(1);
         Sleep(millisecondsToWait);
         timeEndPeriod(1);
@@ -50,26 +44,39 @@ public:
             YieldProcessor();
         } while (currentTime.QuadPart < nextFrameStartTime.QuadPart);
 
-        nextFrameStartTime.QuadPart += (long long)(targetFrameTimeSeconds * ticksPerSecond.QuadPart);
+        
+        long long targetIntervalTicks = (long long)(targetFrameTimeSeconds * ticksPerSecond.QuadPart);
+        if (currentTime.QuadPart > nextFrameStartTime.QuadPart + targetIntervalTicks) {
+            nextFrameStartTime.QuadPart = currentTime.QuadPart;
+        }
+        nextFrameStartTime.QuadPart += targetIntervalTicks;
     }
 };
 
-void waitForNextRenderFrame() {
+void waitForNextRenderFrame(uint32_t numFramesToWait) {
     static FrameLimiter instanceRender;
-    instanceRender.WaitForNextFrame();
+
+    if (numFramesToWait > 3) {
+        numFramesToWait = 3;
+    }
+
+    for (uint32_t i = 0; i < numFramesToWait; i++) {
+        instanceRender.WaitForNextFrame();
+    }
 }
 
 bool patchRenderThreadFpsLimiter(void* gameMemory, size_t gameMemoryLen) {
     const char* signature = "\xf2\x0f\x5e\xc7\x66\x0f\x5a\xc0\xf3\x0f\x2c\xc0\x3b\xc6\x7d\x1c\xff\x15\x6b\xff\x09\x00\xeb\xb1\x48\x8b\x07\x44\x8b\x05\x27\x64\x6b\x00\x33\xd2\x48\x8b\xcf\xff\x50\x40\x8b\xf8";
     const char* mask = "............................................";
 
-    void (*waitRendfuncPtr)() = waitForNextRenderFrame;
+    void (*waitRendfuncPtr)(uint32_t) = waitForNextRenderFrame;
     uint8_t patch[] = {
+        0x89, 0xf1, // mov ecx, esi (for the no of frames to wait)
         0x48, 0xb8, // movabs rax, imm64
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // placeholder for address
-        0xff, 0xd0 // call rax
+        0xff, 0xd0  // call rax
     };
-    memcpy(&patch[2], &waitRendfuncPtr, 8);
+    memcpy(&patch[4], &waitRendfuncPtr, 8);
 
     return CodeHook(gameMemory, gameMemoryLen, signature, mask, std::vector<uint8_t>(patch, patch + sizeof(patch)));
 }
